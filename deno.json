@@ -6,6 +6,7 @@
     "check": "deno check main.ts src/ tests/"
   },
   "imports": {
+    "hono": "npm:hono@^4.13.1",
     "postgres": "npm:postgres@^3.4.7"
   },
   "compilerOptions": {

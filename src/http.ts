@@ -1,27 +1,18 @@
 import { HttpError, MethodNotAllowedError, ValidationError } from "./errors.ts";
 
-const CORS_HEADERS: Record<string, string> = {
-  // The API is stateless and unauthenticated, so there is nothing for a browser to leak here.
-  // This is what lets a frontend be added later without touching the server.
-  "access-control-allow-origin": "*",
-  "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-  "access-control-allow-headers": "content-type",
-  "access-control-max-age": "86400",
-};
-
+/**
+ * Bodies are pretty-printed. This is an API meant to be poked at with curl before it has a
+ * frontend, and the few bytes cost less than the readability is worth.
+ */
 export function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body, null, 2), {
     status,
-    headers: { "content-type": "application/json; charset=utf-8", ...CORS_HEADERS, ...headers },
+    headers: { "content-type": "application/json; charset=utf-8", ...headers },
   });
 }
 
 export function noContent(): Response {
-  return new Response(null, { status: 204, headers: CORS_HEADERS });
-}
-
-export function preflight(): Response {
-  return new Response(null, { status: 204, headers: CORS_HEADERS });
+  return new Response(null, { status: 204 });
 }
 
 /** Renders any error as `{ "error": { code, message, details? } }`. */
@@ -111,12 +102,4 @@ function parseOrder(raw: string | null): "asc" | "desc" {
   throw new ValidationError("Invalid query parameter", [
     { field: "order", message: 'must be "asc" or "desc"' },
   ]);
-}
-
-/** Throws a 405 carrying an `Allow` header unless the request uses one of `allowed`. */
-export function requireMethod(request: Request, allowed: string[]): string {
-  if (!allowed.includes(request.method)) {
-    throw new MethodNotAllowedError(allowed);
-  }
-  return request.method;
 }
