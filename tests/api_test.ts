@@ -55,10 +55,12 @@ function makeApi(handle: Handler): Api {
       }),
     );
 
+    // Every endpoint answers with JSON except the admin UI, which is HTML.
     const text = await response.text();
+    const isJson = (response.headers.get("content-type") ?? "").includes("application/json");
     return {
       status: response.status,
-      body: text === "" ? null : JSON.parse(text),
+      body: text === "" ? null : isJson ? JSON.parse(text) : text,
       headers: response.headers,
     };
   }
@@ -333,6 +335,19 @@ apiTest("a resource cannot be named after a route the server owns", async (api) 
     });
     assert.equal(response.status, 400, `expected "${name}" to be rejected`);
   }
+});
+
+apiTest("the admin UI is served from the same origin as the API", async (api) => {
+  for (const path of ["/__admin", "/__admin/"]) {
+    const response = await api.request("GET", path);
+    assert.equal(response.status, 200, path);
+    assert.match(response.headers.get("content-type") ?? "", /text\/html/, path);
+    assert.match(response.body, /<title>small-cms<\/title>/, path);
+  }
+
+  // The page must not shadow the API it drives.
+  assert.equal((await api.request("GET", "/__admin/resources")).status, 200);
+  assert.equal((await api.request("GET", "/__admin/nope")).status, 404);
 });
 
 apiTest("preflight requests are answered for a future frontend", async (api) => {

@@ -1,0 +1,1090 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>small-cms</title>
+    <!-- Inline, so the browser never requests /favicon.ico — which would otherwise fall through
+         to the record routes and cost a database lookup on every page load. -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230a66c2'/%3E%3Cpath d='M4 5h8M4 8h8M4 11h5' stroke='white' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E"
+    />
+    <style>
+    :root {
+      --bg: #ffffff;
+      --bg-sunken: #f6f7f9;
+      --bg-raised: #ffffff;
+      --border: #dfe3e8;
+      --text: #1b1f24;
+      --text-dim: #656d76;
+      --accent: #0a66c2;
+      --accent-text: #ffffff;
+      --danger: #b42318;
+      --danger-bg: #fef3f2;
+      --warn-bg: #fff8e6;
+      --warn-border: #e8c360;
+      --radius: 6px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #16181c;
+        --bg-sunken: #1d2026;
+        --bg-raised: #21252b;
+        --border: #333941;
+        --text: #e6e8eb;
+        --text-dim: #9aa3ad;
+        --accent: #4d9bf0;
+        --accent-text: #10131a;
+        --danger: #f2807a;
+        --danger-bg: #2c1c1c;
+        --warn-bg: #2b2415;
+        --warn-border: #6b5822;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.6 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP",
+        sans-serif;
+    }
+
+    header {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-raised);
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 15px;
+      letter-spacing: 0.02em;
+    }
+
+    header .tag {
+      color: var(--text-dim);
+      font-size: 12px;
+    }
+
+    .banner {
+      padding: 8px 20px;
+      background: var(--warn-bg);
+      border-bottom: 1px solid var(--warn-border);
+      font-size: 12.5px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 240px minmax(0, 1fr);
+      min-height: calc(100vh - 90px);
+    }
+
+    @media (max-width: 720px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    aside {
+      border-right: 1px solid var(--border);
+      background: var(--bg-sunken);
+      padding: 16px 12px;
+    }
+
+    aside h2,
+    main h2 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      margin: 0 0 8px;
+    }
+
+    .res-list {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin-bottom: 12px;
+    }
+
+    .res-item {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 6px 10px;
+      border: 0;
+      border-radius: var(--radius);
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .res-item:hover {
+      background: var(--border);
+    }
+
+    .res-item[aria-current="true"] {
+      background: var(--accent);
+      color: var(--accent-text);
+    }
+
+    .res-item small {
+      display: block;
+      opacity: 0.7;
+      font-size: 11px;
+    }
+
+    main {
+      padding: 20px 24px;
+      min-width: 0;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    .toolbar h3 {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    .spacer {
+      flex: 1;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 4px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+
+    .tab {
+      padding: 6px 12px;
+      border: 0;
+      border-bottom: 2px solid transparent;
+      background: transparent;
+      color: var(--text-dim);
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .tab[aria-selected="true"] {
+      color: var(--text);
+      border-bottom-color: var(--accent);
+    }
+
+    button {
+      padding: 5px 11px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-raised);
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    button:hover:not(:disabled) {
+      border-color: var(--text-dim);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--accent-text);
+    }
+
+    button.danger {
+      color: var(--danger);
+    }
+
+    button.link {
+      border: 0;
+      background: transparent;
+      color: var(--accent);
+      padding: 2px 4px;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      padding: 5px 8px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg);
+      color: inherit;
+      font: inherit;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 32px;
+    }
+
+    input[type="checkbox"] {
+      width: auto;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      max-width: 320px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    th {
+      background: var(--bg-sunken);
+      font-weight: 600;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    tbody tr:last-child td {
+      border-bottom: 0;
+    }
+
+    td.actions {
+      text-align: right;
+    }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    .field-row {
+      display: grid;
+      grid-template-columns: 1.4fr 0.9fr auto 1.2fr auto;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    @media (max-width: 720px) {
+      .field-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .field-row .req {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      white-space: nowrap;
+      color: var(--text-dim);
+      font-size: 12px;
+    }
+
+    .form-grid {
+      display: grid;
+      gap: 12px;
+      max-width: 720px;
+    }
+
+    .form-grid label > span {
+      display: block;
+      margin-bottom: 3px;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    .form-grid label > span .req-mark {
+      color: var(--danger);
+    }
+
+    .card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-raised);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .error {
+      border: 1px solid var(--danger);
+      background: var(--danger-bg);
+      color: var(--danger);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      margin-bottom: 14px;
+      font-size: 13px;
+    }
+
+    .error ul {
+      margin: 6px 0 0;
+      padding-left: 18px;
+    }
+
+    .field-error {
+      color: var(--danger);
+      font-size: 12px;
+      margin-top: 3px;
+    }
+
+    .empty {
+      color: var(--text-dim);
+      padding: 28px 4px;
+      text-align: center;
+    }
+
+    .pager {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+      font-size: 13px;
+      color: var(--text-dim);
+    }
+
+    .hint {
+      color: var(--text-dim);
+      font-size: 12px;
+    }
+    </style>
+  </head>
+
+  <body>
+    <header>
+      <h1>small-cms</h1>
+      <span class="tag">管理画面</span>
+    </header>
+    <div class="banner">
+      <strong>認証なし</strong>
+      ― この画面と <code>/__admin</code> API は誰でも操作できます。公開環境では前段に認証を置いてください。
+    </div>
+    <div class="layout">
+      <aside id="sidebar"></aside>
+      <main id="main"></main>
+    </div>
+
+    <script>
+    "use strict";
+
+    // ---------------------------------------------------------------- DOM helpers
+
+    /** Builds an element. Children are set as text, never as HTML, so record data cannot
+        inject markup into this page. */
+    function el(tag, props, ...children) {
+      const node = document.createElement(tag);
+      for (const [key, value] of Object.entries(props || {})) {
+        if (value === null || value === undefined || value === false) continue;
+        if (key === "class") node.className = value;
+        else if (key === "text") node.textContent = value;
+        else if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
+        else if (key in node && key !== "list") node[key] = value;
+        else node.setAttribute(key, value);
+      }
+      for (const child of children.flat()) {
+        if (child === null || child === undefined || child === false) continue;
+        node.append(child instanceof Node ? child : document.createTextNode(String(child)));
+      }
+      return node;
+    }
+
+    function clear(node, ...children) {
+      node.replaceChildren(...children.flat().filter((c) => c !== null && c !== false));
+      return node;
+    }
+
+    // ---------------------------------------------------------------- API
+
+    async function api(method, path, body) {
+      const response = await fetch(path, {
+        method,
+        headers: body === undefined ? {} : { "content-type": "application/json" },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      const text = await response.text();
+      const data = text === "" ? null : JSON.parse(text);
+      if (!response.ok) throw Object.assign(new Error("request failed"), { api: data && data.error });
+      return data;
+    }
+
+    const FIELD_TYPES = ["string", "number", "boolean", "datetime", "json"];
+    const MANAGED = ["id", "createdAt", "updatedAt"];
+
+    // ---------------------------------------------------------------- state
+
+    const state = {
+      resources: [],
+      selected: null,
+      tab: "records",
+      creatingResource: false,
+      records: null,
+      limit: 20,
+      offset: 0,
+      editing: undefined, // undefined = closed, null = new record, object = existing
+      error: null,
+      issues: {},
+    };
+
+    function setError(err) {
+      state.issues = {};
+      if (!err) {
+        state.error = null;
+        return;
+      }
+      const info = err.api;
+      state.error = info ? info.message : String(err.message || err);
+      for (const issue of (info && info.details) || []) state.issues[issue.field] = issue.message;
+    }
+
+    // ---------------------------------------------------------------- loading
+
+    async function loadResources() {
+      const data = await api("GET", "/__admin/resources");
+      state.resources = data.items;
+      if (state.selected && !state.resources.some((r) => r.name === state.selected)) {
+        state.selected = null;
+      }
+      if (!state.selected && !state.creatingResource && state.resources.length > 0) {
+        state.selected = state.resources[0].name;
+      }
+    }
+
+    async function loadRecords() {
+      if (!state.selected) {
+        state.records = null;
+        return;
+      }
+      const query = "?limit=" + state.limit + "&offset=" + state.offset;
+      state.records = await api("GET", "/" + state.selected + query);
+    }
+
+    async function refresh() {
+      try {
+        await loadResources();
+        if (state.tab === "records") await loadRecords();
+      } catch (err) {
+        setError(err);
+      }
+      render();
+    }
+
+    /** Wraps an action so failures land in the error banner instead of the console. */
+    function run(fn) {
+      return async (event) => {
+        if (event && event.preventDefault) event.preventDefault();
+        setError(null);
+        try {
+          await fn();
+        } catch (err) {
+          setError(err);
+        }
+        render();
+      };
+    }
+
+    function selectResource(name) {
+      state.selected = name;
+      state.creatingResource = false;
+      state.editing = undefined;
+      state.offset = 0;
+      setError(null);
+    }
+
+    // ---------------------------------------------------------------- sidebar
+
+    function renderSidebar() {
+      const list = el(
+        "div",
+        { class: "res-list" },
+        state.resources.map((resource) =>
+          el(
+            "button",
+            {
+              class: "res-item",
+              "aria-current": String(!state.creatingResource && resource.name === state.selected),
+              onclick: run(async () => {
+                selectResource(resource.name);
+                await loadRecords();
+              }),
+            },
+            el("span", { text: resource.name }),
+            el("small", { text: Object.keys(resource.fields).length + " フィールド" }),
+          )
+        ),
+      );
+
+      clear(
+        document.getElementById("sidebar"),
+        el("h2", { text: "データ型" }),
+        state.resources.length === 0 ? el("p", { class: "hint", text: "まだありません" }) : list,
+        el("button", {
+          text: "+ 新しいデータ型",
+          onclick: run(async () => {
+            state.creatingResource = true;
+            state.editing = undefined;
+          }),
+        }),
+      );
+    }
+
+    // ---------------------------------------------------------------- schema editor
+
+    /** One editable row of a schema. Kept as live DOM so the form can be read back on submit. */
+    function fieldRow(name, definition) {
+      const nameInput = el("input", {
+        value: name || "",
+        placeholder: "フィールド名",
+        "data-role": "name",
+      });
+      const typeSelect = el(
+        "select",
+        { "data-role": "type" },
+        FIELD_TYPES.map((type) =>
+          el("option", { value: type, text: type, selected: definition && definition.type === type })
+        ),
+      );
+      const requiredInput = el("input", {
+        type: "checkbox",
+        checked: Boolean(definition && definition.required),
+        "data-role": "required",
+      });
+      const defaultInput = el("input", {
+        value: definition && "default" in definition ? JSON.stringify(definition.default) : "",
+        placeholder: "既定値 (JSON)",
+        "data-role": "default",
+        disabled: Boolean(definition && definition.required),
+      });
+
+      // The API rejects a default on a required field, so the form says so before you submit.
+      requiredInput.addEventListener("change", () => {
+        defaultInput.disabled = requiredInput.checked;
+        if (requiredInput.checked) defaultInput.value = "";
+      });
+
+      const row = el(
+        "div",
+        { class: "field-row" },
+        nameInput,
+        typeSelect,
+        el("label", { class: "req" }, requiredInput, "必須"),
+        defaultInput,
+        el("button", {
+          type: "button",
+          class: "link danger",
+          text: "削除",
+          onclick: () => row.remove(),
+        }),
+      );
+      return row;
+    }
+
+    /** Reads the rows back into the `fields` object the API expects. */
+    function collectFields(container) {
+      const fields = {};
+      for (const row of container.querySelectorAll(".field-row")) {
+        const name = row.querySelector('[data-role="name"]').value.trim();
+        if (name === "") continue;
+
+        const definition = {
+          type: row.querySelector('[data-role="type"]').value,
+          required: row.querySelector('[data-role="required"]').checked,
+        };
+        const raw = row.querySelector('[data-role="default"]').value.trim();
+        if (!definition.required && raw !== "") {
+          try {
+            definition.default = JSON.parse(raw);
+          } catch {
+            throw Object.assign(new Error("bad default"), {
+              api: {
+                message: "既定値が JSON として読めません",
+                details: [{ field: "fields." + name + ".default", message: raw }],
+              },
+            });
+          }
+        }
+        fields[name] = definition;
+      }
+      return fields;
+    }
+
+    function renderSchemaEditor(resource) {
+      const isNew = !resource;
+      const nameInput = el("input", {
+        value: resource ? resource.name : "",
+        placeholder: "articles",
+        disabled: !isNew,
+      });
+
+      const rows = el(
+        "div",
+        {},
+        isNew
+          ? [fieldRow("", { type: "string", required: true })]
+          : Object.entries(resource.fields).map(([name, def]) => fieldRow(name, def)),
+      );
+
+      const save = run(async () => {
+        const fields = collectFields(rows);
+        if (isNew) {
+          const name = nameInput.value.trim();
+          await api("POST", "/__admin/resources", { name, fields });
+          state.creatingResource = false;
+          state.selected = name;
+          state.tab = "records";
+        } else {
+          await api("PUT", "/__admin/resources/" + resource.name, { fields });
+          state.tab = "records";
+        }
+        await refreshAfterSchemaChange();
+      });
+
+      return el(
+        "form",
+        { onsubmit: save },
+        el(
+          "div",
+          { class: "card" },
+          el(
+            "label",
+            {},
+            el(
+              "span",
+              {},
+              "名前",
+              isNew ? el("span", { class: "req-mark", text: " *" }) : null,
+            ),
+            nameInput,
+            issueFor(isNew ? "name" : null),
+            el("p", {
+              class: "hint",
+              text: isNew
+                ? "そのまま URL になります（articles → /articles）。小文字で始まり、英数字と - _ が使えます。"
+                : "名前は変更できません。変えたい場合は新しいデータ型を作ってください。",
+            }),
+          ),
+        ),
+        el(
+          "div",
+          { class: "card" },
+          el("h2", { text: "フィールド" }),
+          // Each column heading needs its own element: bare text nodes are not grid items, so
+          // they would all collapse into the first cell.
+          el(
+            "div",
+            { class: "field-row hint" },
+            // The required column is left blank: every row already labels its own checkbox,
+            // which is what the single-column mobile layout relies on.
+            ["名前", "型", "", "既定値", ""].map((label) => el("span", { text: label })),
+          ),
+          rows,
+          el("button", {
+            type: "button",
+            text: "+ フィールドを追加",
+            onclick: () => rows.append(fieldRow("", { type: "string" })),
+          }),
+          el("p", {
+            class: "hint",
+            text: '既定値は JSON で書きます（文字列なら "下書き"、数値なら 0）。' +
+              MANAGED.join(" / ") + " はサーバが管理するので使えません。",
+          }),
+          fieldIssues(),
+        ),
+        el(
+          "div",
+          { class: "toolbar" },
+          el("button", { class: "primary", type: "submit", text: isNew ? "作成" : "保存" }),
+          isNew
+            ? el("button", {
+              type: "button",
+              text: "キャンセル",
+              onclick: run(async () => {
+                state.creatingResource = false;
+              }),
+            })
+            : null,
+        ),
+      );
+    }
+
+    async function refreshAfterSchemaChange() {
+      await loadResources();
+      await loadRecords();
+    }
+
+    function issueFor(field) {
+      if (!field || !state.issues[field]) return null;
+      return el("div", { class: "field-error", text: state.issues[field] });
+    }
+
+    /** Field-level problems from the schema form, which are keyed `fields.<name>...`. */
+    function fieldIssues() {
+      const entries = Object.entries(state.issues).filter(([key]) => key.startsWith("fields"));
+      if (entries.length === 0) return null;
+      return el(
+        "div",
+        { class: "field-error" },
+        entries.map(([key, message]) => el("div", { text: key + ": " + message })),
+      );
+    }
+
+    // ---------------------------------------------------------------- record form
+
+    function inputForField(name, definition, value) {
+      const has = value !== undefined && value !== null;
+      switch (definition.type) {
+        case "boolean":
+          return el("input", { type: "checkbox", checked: has ? Boolean(value) : false });
+        case "number":
+          return el("input", { type: "number", step: "any", value: has ? String(value) : "" });
+        case "datetime":
+          return el("input", { type: "datetime-local", value: has ? toLocalInput(value) : "" });
+        case "json":
+          return el("textarea", { rows: 4, value: has ? JSON.stringify(value, null, 2) : "" });
+        default:
+          // A textarea rather than a text input: a CMS string is as likely to be a body as a title.
+          return el("textarea", { rows: 2, value: has ? String(value) : "" });
+      }
+    }
+
+    function readField(definition, input) {
+      if (definition.type === "boolean") return input.checked;
+
+      const raw = input.value.trim();
+      if (raw === "") return undefined; // omitted, so the schema's default applies
+
+      switch (definition.type) {
+        case "number":
+          return Number(raw);
+        case "datetime":
+          return new Date(raw).toISOString();
+        case "json":
+          try {
+            return JSON.parse(raw);
+          } catch {
+            throw Object.assign(new Error("bad json"), {
+              api: { message: "JSON として読めない値があります" },
+            });
+          }
+        default:
+          return raw;
+      }
+    }
+
+    function toLocalInput(iso) {
+      const date = new Date(iso);
+      if (Number.isNaN(date.getTime())) return "";
+      const pad = (n) => String(n).padStart(2, "0");
+      return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate()) +
+        "T" + pad(date.getHours()) + ":" + pad(date.getMinutes());
+    }
+
+    function renderRecordForm(resource, record) {
+      const inputs = {};
+      const rows = Object.entries(resource.fields).map(([name, definition]) => {
+        const input = inputForField(name, definition, record ? record[name] : undefined);
+        inputs[name] = input;
+        return el(
+          "label",
+          {},
+          el(
+            "span",
+            {},
+            name,
+            " ",
+            el("span", { class: "mono", text: definition.type }),
+            definition.required ? el("span", { class: "req-mark", text: " *" }) : null,
+          ),
+          input,
+          issueFor(name),
+        );
+      });
+
+      const submit = run(async () => {
+        const body = {};
+        for (const [name, definition] of Object.entries(resource.fields)) {
+          const value = readField(definition, inputs[name]);
+          if (value !== undefined) body[name] = value;
+        }
+        if (record) {
+          // PUT rather than PATCH: the form shows the whole record, so it replaces the whole record.
+          await api("PUT", "/" + resource.name + "/" + record.id, body);
+        } else {
+          await api("POST", "/" + resource.name, body);
+        }
+        state.editing = undefined;
+        await loadRecords();
+      });
+
+      return el(
+        "form",
+        { class: "card", onsubmit: submit },
+        el("h2", { text: record ? "レコードを編集" : "新しいレコード" }),
+        record ? el("p", { class: "mono", text: record.id }) : null,
+        el("div", { class: "form-grid" }, rows),
+        el(
+          "div",
+          { class: "toolbar", style: "margin-top:16px;margin-bottom:0" },
+          el("button", { class: "primary", type: "submit", text: "保存" }),
+          el("button", {
+            type: "button",
+            text: "キャンセル",
+            onclick: run(async () => {
+              state.editing = undefined;
+            }),
+          }),
+          record
+            ? el("p", {
+              class: "hint",
+              text: "空欄の任意フィールドは既定値に戻ります。",
+            })
+            : null,
+        ),
+      );
+    }
+
+    // ---------------------------------------------------------------- records table
+
+    function cellText(value) {
+      if (value === undefined) return "";
+      if (value === null) return "null";
+      if (typeof value === "object") return JSON.stringify(value);
+      return String(value);
+    }
+
+    function renderRecords(resource) {
+      if (state.editing !== undefined) {
+        return renderRecordForm(resource, state.editing);
+      }
+
+      const columns = Object.keys(resource.fields);
+      const result = state.records || { items: [], total: 0, limit: state.limit, offset: 0 };
+
+      const table = el(
+        "div",
+        { class: "table-wrap" },
+        el(
+          "table",
+          {},
+          el(
+            "thead",
+            {},
+            el(
+              "tr",
+              {},
+              columns.map((name) => el("th", { text: name })),
+              el("th", { text: "作成" }),
+              el("th", {}),
+            ),
+          ),
+          el(
+            "tbody",
+            {},
+            result.items.map((record) =>
+              el(
+                "tr",
+                {},
+                columns.map((name) =>
+                  el("td", { title: cellText(record[name]) }, cellText(record[name]))
+                ),
+                el("td", { class: "mono", text: new Date(record.createdAt).toLocaleString() }),
+                el(
+                  "td",
+                  { class: "actions" },
+                  el("button", {
+                    class: "link",
+                    text: "編集",
+                    onclick: run(async () => {
+                      state.editing = record;
+                    }),
+                  }),
+                  el("button", {
+                    class: "link danger",
+                    text: "削除",
+                    onclick: run(async () => {
+                      if (!confirm("このレコードを削除しますか？")) return;
+                      await api("DELETE", "/" + resource.name + "/" + record.id);
+                      await loadRecords();
+                    }),
+                  }),
+                ),
+              )
+            ),
+          ),
+        ),
+      );
+
+      const from = result.total === 0 ? 0 : result.offset + 1;
+      const to = result.offset + result.items.length;
+
+      return el(
+        "div",
+        {},
+        el(
+          "div",
+          { class: "toolbar" },
+          el("button", {
+            class: "primary",
+            text: "+ 新しいレコード",
+            onclick: run(async () => {
+              state.editing = null;
+            }),
+          }),
+        ),
+        result.items.length === 0 ? el("div", { class: "empty", text: "レコードがありません" }) : table,
+        el(
+          "div",
+          { class: "pager" },
+          el("button", {
+            text: "前へ",
+            disabled: result.offset === 0,
+            onclick: run(async () => {
+              state.offset = Math.max(0, state.offset - state.limit);
+              await loadRecords();
+            }),
+          }),
+          el("button", {
+            text: "次へ",
+            disabled: to >= result.total,
+            onclick: run(async () => {
+              state.offset = state.offset + state.limit;
+              await loadRecords();
+            }),
+          }),
+          el("span", {
+            text: result.total === 0 ? "0 件" : from + "–" + to + " / " + result.total + " 件",
+          }),
+        ),
+      );
+    }
+
+    // ---------------------------------------------------------------- main
+
+    function renderMain() {
+      const main = document.getElementById("main");
+      const banner = state.error
+        ? el(
+          "div",
+          { class: "error" },
+          el("strong", { text: state.error }),
+          Object.keys(state.issues).length > 0
+            ? el(
+              "ul",
+              {},
+              Object.entries(state.issues).map(([field, message]) =>
+                el("li", { text: field + " — " + message })
+              ),
+            )
+            : null,
+        )
+        : null;
+
+      if (state.creatingResource) {
+        clear(
+          main,
+          el("div", { class: "toolbar" }, el("h3", { text: "新しいデータ型" })),
+          banner,
+          renderSchemaEditor(null),
+        );
+        return;
+      }
+
+      const resource = state.resources.find((r) => r.name === state.selected);
+      if (!resource) {
+        clear(
+          main,
+          banner,
+          el("div", {
+            class: "empty",
+            text: "左の「+ 新しいデータ型」からデータ型を作ると、その CRUD エンドポイントが生えます。",
+          }),
+        );
+        return;
+      }
+
+      const tabs = el(
+        "div",
+        { class: "tabs" },
+        [["records", "レコード"], ["schema", "スキーマ"]].map(([id, label]) =>
+          el("button", {
+            class: "tab",
+            "aria-selected": String(state.tab === id),
+            text: label,
+            onclick: run(async () => {
+              state.tab = id;
+              state.editing = undefined;
+              if (id === "records") await loadRecords();
+            }),
+          })
+        ),
+      );
+
+      clear(
+        main,
+        el(
+          "div",
+          { class: "toolbar" },
+          el("h3", { text: resource.name }),
+          el("span", { class: "mono", text: "/" + resource.name }),
+          el("span", { class: "spacer" }),
+          el("button", {
+            class: "danger",
+            text: "データ型を削除",
+            onclick: run(async () => {
+              const ok = confirm(
+                "データ型「" + resource.name + "」と、そのレコードをすべて削除します。よろしいですか？",
+              );
+              if (!ok) return;
+              await api("DELETE", "/__admin/resources/" + resource.name);
+              state.selected = null;
+              state.editing = undefined;
+              await refreshAfterSchemaChange();
+            }),
+          }),
+        ),
+        tabs,
+        banner,
+        state.tab === "records" ? renderRecords(resource) : renderSchemaEditor(resource),
+      );
+    }
+
+    function render() {
+      renderSidebar();
+      renderMain();
+    }
+
+    refresh();
+    </script>
+  </body>
+</html>

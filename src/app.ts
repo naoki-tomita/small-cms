@@ -1,5 +1,8 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+// A text import rather than a runtime file read: it is resolved when the module graph is built,
+// so the page ships with the deployment instead of depending on a readable filesystem at runtime.
+import adminUi from "./ui/index.html" with { type: "text" };
 import type { Sql } from "./db.ts";
 import { MethodNotAllowedError, NotFoundError } from "./errors.ts";
 import { errorResponse, json, noContent, parseListQuery, readJsonBody } from "./http.ts";
@@ -61,6 +64,23 @@ export function createHandler(sql: Sql): Handler {
       })),
     });
   });
+
+  // --- /__admin — the admin UI ---
+
+  // One self-contained page that drives the JSON API below over fetch. Serving it from the same
+  // origin as the API is what keeps it dependency-free: no build step, no bundler, no CORS.
+  const uiPage = () =>
+    new Response(adminUi, {
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        // The page is the deployment's own asset, but it is small and always paired with an API
+        // whose shape it assumes, so a stale copy is worth more trouble than a re-fetch.
+        "cache-control": "no-cache",
+      },
+    });
+
+  app.get("/__admin", uiPage);
+  app.get("/__admin/", uiPage);
 
   // --- /__admin/resources — CRUD over the resource definitions themselves ---
 
