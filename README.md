@@ -36,6 +36,17 @@ deno task dev          # http://localhost:8000
 | `deno task test`  | テスト（`DATABASE_URL` 未設定なら API テストはスキップ） |
 | `deno task check` | 型チェック                                               |
 
+### 動作確認
+
+デプロイ先でも手元でも、全エンドポイントを一通り叩いて確認できます。
+
+```bash
+./scripts/smoke.sh https://small-cms.example.deno.net   # 省略時は http://localhost:8000
+```
+
+使い捨ての名前でリソースを作り、CRUD・バリデーション・ルーティングを確認してから削除します。
+既存のリソースには触れません。終了コードは失敗した項目数です。
+
 ## API
 
 ### 管理 API — リソース自体の CRUD
