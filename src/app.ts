@@ -1,14 +1,8 @@
+import { Hono } from "hono";
+import { cors } from "hono/cors";
 import type { Sql } from "./db.ts";
-import { NotFoundError } from "./errors.ts";
-import {
-  errorResponse,
-  json,
-  noContent,
-  parseListQuery,
-  preflight,
-  readJsonBody,
-  requireMethod,
-} from "./http.ts";
+import { MethodNotAllowedError, NotFoundError } from "./errors.ts";
+import { errorResponse, json, noContent, parseListQuery, readJsonBody } from "./http.ts";
 import {
   createRecord,
   deleteRecord,
@@ -26,136 +20,137 @@ import {
 } from "./resources.ts";
 import { parseFields, parseResourceDefinition } from "./schema.ts";
 
-export type Handler = (request: Request) => Promise<Response>;
+/** Hono answers some requests without awaiting anything, hence the union rather than a Promise. */
+export type Handler = (request: Request) => Response | Promise<Response>;
 
 /**
  * Builds the request handler.
  *
- * Routing is deliberately hand-rolled: the route table is tiny and its first segment is dynamic
- * (it is whatever resource happens to be registered), which a static route table would not express
- * any more clearly than a switch on the path segments.
+ * Routes are registered most-specific first. The record endpoints live at the root (`/:resource`),
+ * so every other route would be ambiguous with them if it were not matched earlier; Hono resolves
+ * static segments ahead of parameters, and the registration order says the same thing out loud.
  */
 export function createHandler(sql: Sql): Handler {
-  return async function handle(request: Request): Promise<Response> {
-    if (request.method === "OPTIONS") {
-      return preflight();
-    }
+  const app = new Hono();
 
-    try {
-      const url = new URL(request.url);
-      const segments = url.pathname.split("/").filter((segment) => segment !== "");
+  // The API is stateless and unauthenticated, so there is nothing for a browser to leak here.
+  // This is what lets a frontend be added later without touching the server.
+  app.use(
+    "*",
+    cors({
+      origin: "*",
+      allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      allowHeaders: ["content-type"],
+      maxAge: 86400,
+    }),
+  );
 
-      // Anything the CMS itself owns lives under a prefix that resource names cannot take,
-      // so registering a resource can never shadow an existing route.
-      if (segments[0] === "__admin") {
-        return await handleAdmin(sql, request, segments.slice(1));
-      }
-      if (segments.length === 0) {
-        return await handleIndex(sql, request, url);
-      }
-      if (segments.length === 1 && segments[0] === "_health") {
-        requireMethod(request, ["GET"]);
-        return json({ status: "ok" });
-      }
+  // Anything the CMS itself owns lives under a name that a resource cannot take,
+  // so registering a resource can never shadow an existing route.
+  app.get("/_health", () => json({ status: "ok" }));
 
-      return await handleRecords(sql, request, url, segments);
-    } catch (error) {
-      return errorResponse(error);
-    }
-  };
-}
-
-/** `GET /` — lists what is registered, so the API is discoverable without a frontend. */
-async function handleIndex(sql: Sql, request: Request, url: URL): Promise<Response> {
-  requireMethod(request, ["GET"]);
-  const resources = await listResources(sql);
-
-  return json({
-    name: "small-cms",
-    resources: resources.map((resource) => ({
-      name: resource.name,
-      endpoint: new URL(`/${resource.name}`, url.origin).pathname,
-      fields: Object.keys(resource.fields),
-    })),
+  /** `GET /` — lists what is registered, so the API is discoverable without a frontend. */
+  app.get("/", async () => {
+    const resources = await listResources(sql);
+    return json({
+      name: "small-cms",
+      resources: resources.map((resource) => ({
+        name: resource.name,
+        endpoint: `/${resource.name}`,
+        fields: Object.keys(resource.fields),
+      })),
+    });
   });
-}
 
-/** `/__admin/resources[/{name}]` — CRUD over the resource definitions themselves. */
-async function handleAdmin(sql: Sql, request: Request, segments: string[]): Promise<Response> {
-  if (segments[0] !== "resources") {
-    throw new NotFoundError(`Unknown admin endpoint "/${["__admin", ...segments].join("/")}"`);
-  }
+  // --- /__admin/resources — CRUD over the resource definitions themselves ---
 
-  if (segments.length === 1) {
-    switch (requireMethod(request, ["GET", "POST"])) {
-      case "GET":
-        return json({ items: await listResources(sql) });
-      case "POST": {
-        const definition = parseResourceDefinition(await readJsonBody(request));
-        const created = await createResource(sql, definition);
-        return json(created, 201, { location: `/__admin/resources/${created.name}` });
-      }
-    }
-  }
+  app.get("/__admin/resources", async () => json({ items: await listResources(sql) }));
 
-  if (segments.length === 2) {
-    const name = segments[1]!;
-    switch (requireMethod(request, ["GET", "PUT", "DELETE"])) {
-      case "GET":
-        return json(await getResource(sql, name));
-      case "PUT": {
-        const body = await readJsonBody(request);
-        // Reuse the full definition parser so a body naming a different resource is rejected,
-        // then persist only the fields — a resource cannot be renamed through its own URL.
-        const definition = parseResourceDefinition(body, name);
-        return json(await replaceResource(sql, name, parseFields(definition.fields)));
-      }
-      case "DELETE":
-        await deleteResource(sql, name);
-        return noContent();
-    }
-  }
+  app.post("/__admin/resources", async (c) => {
+    const definition = parseResourceDefinition(await readJsonBody(c.req.raw));
+    const created = await createResource(sql, definition);
+    return json(created, 201, { location: `/__admin/resources/${created.name}` });
+  });
 
-  throw new NotFoundError(`Unknown admin endpoint "/${["__admin", ...segments].join("/")}"`);
-}
+  app.get(
+    "/__admin/resources/:name",
+    async (c) => json(await getResource(sql, c.req.param("name"))),
+  );
 
-/** `/{resource}[/{id}]` — the CRUD endpoints that appear as soon as a resource is registered. */
-async function handleRecords(
-  sql: Sql,
-  request: Request,
-  url: URL,
-  segments: string[],
-): Promise<Response> {
-  if (segments.length > 2) {
-    throw new NotFoundError(`Unknown endpoint "${url.pathname}"`);
-  }
+  app.put("/__admin/resources/:name", async (c) => {
+    const name = c.req.param("name");
+    // Reuse the full definition parser so a body naming a different resource is rejected,
+    // then persist only the fields — a resource cannot be renamed through its own URL.
+    const definition = parseResourceDefinition(await readJsonBody(c.req.raw), name);
+    return json(await replaceResource(sql, name, parseFields(definition.fields)));
+  });
 
-  const resourceName = segments[0]!;
-  const resource = await getResource(sql, resourceName);
+  app.delete("/__admin/resources/:name", async (c) => {
+    await deleteResource(sql, c.req.param("name"));
+    return noContent();
+  });
 
-  if (segments.length === 1) {
-    switch (requireMethod(request, ["GET", "POST"])) {
-      case "GET":
-        return json(await listRecords(sql, resource, parseListQuery(url.searchParams)));
-      case "POST": {
-        const created = await createRecord(sql, resource, await readJsonBody(request));
-        return json(created, 201, { location: `/${resource.name}/${created.id}` });
-      }
-    }
-  }
+  app.all("/__admin/resources", () => {
+    throw new MethodNotAllowedError(["GET", "POST"]);
+  });
+  app.all("/__admin/resources/:name", () => {
+    throw new MethodNotAllowedError(["GET", "PUT", "DELETE"]);
+  });
+  app.all("/__admin/*", (c) => {
+    throw new NotFoundError(`Unknown admin endpoint "${c.req.path}"`);
+  });
 
-  const id = segments[1]!;
-  switch (requireMethod(request, ["GET", "PUT", "PATCH", "DELETE"])) {
-    case "GET":
-      return json(await getRecord(sql, resource, id));
-    case "PUT":
-      return json(await replaceRecord(sql, resource, id, await readJsonBody(request)));
-    case "PATCH":
-      return json(await patchRecord(sql, resource, id, await readJsonBody(request)));
-    case "DELETE":
-      await deleteRecord(sql, resource, id);
-      return noContent();
-  }
+  // --- /:resource — the CRUD endpoints that appear as soon as a resource is registered ---
 
-  throw new NotFoundError(`Unknown endpoint "${url.pathname}"`);
+  app.get("/:resource", async (c) => {
+    const resource = await getResource(sql, c.req.param("resource"));
+    const query = parseListQuery(new URL(c.req.url).searchParams);
+    return json(await listRecords(sql, resource, query));
+  });
+
+  app.post("/:resource", async (c) => {
+    const resource = await getResource(sql, c.req.param("resource"));
+    const created = await createRecord(sql, resource, await readJsonBody(c.req.raw));
+    return json(created, 201, { location: `/${resource.name}/${created.id}` });
+  });
+
+  app.get("/:resource/:id", async (c) => {
+    const resource = await getResource(sql, c.req.param("resource"));
+    return json(await getRecord(sql, resource, c.req.param("id")));
+  });
+
+  app.put("/:resource/:id", async (c) => {
+    const resource = await getResource(sql, c.req.param("resource"));
+    return json(
+      await replaceRecord(sql, resource, c.req.param("id"), await readJsonBody(c.req.raw)),
+    );
+  });
+
+  app.patch("/:resource/:id", async (c) => {
+    const resource = await getResource(sql, c.req.param("resource"));
+    return json(await patchRecord(sql, resource, c.req.param("id"), await readJsonBody(c.req.raw)));
+  });
+
+  app.delete("/:resource/:id", async (c) => {
+    const resource = await getResource(sql, c.req.param("resource"));
+    await deleteRecord(sql, resource, c.req.param("id"));
+    return noContent();
+  });
+
+  // Reached only when the path matched but the method did not. Registering these after the
+  // method-specific handlers is what makes "wrong method" a 405 instead of a 404 — but the
+  // resource still has to exist, or the answer is 404 like any other unknown path.
+  app.all("/:resource", async (c) => {
+    await getResource(sql, c.req.param("resource"));
+    throw new MethodNotAllowedError(["GET", "POST"]);
+  });
+  app.all("/:resource/:id", async (c) => {
+    await getResource(sql, c.req.param("resource"));
+    throw new MethodNotAllowedError(["GET", "PUT", "PATCH", "DELETE"]);
+  });
+
+  app.notFound((c) => errorResponse(new NotFoundError(`Unknown endpoint "${c.req.path}"`)));
+  app.onError((error) => errorResponse(error));
+
+  return app.fetch;
 }

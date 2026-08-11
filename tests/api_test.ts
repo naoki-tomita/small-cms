@@ -341,6 +341,22 @@ apiTest("preflight requests are answered for a future frontend", async (api) => 
   assert.equal(response.headers.get("access-control-allow-origin"), "*");
 });
 
+apiTest("CORS headers survive on error responses too", async (api) => {
+  await api.createArticles();
+
+  // A browser has to be able to read the error body, not just the happy path — which means the
+  // headers have to be on responses produced by throwing, not only on the ones handlers return.
+  const cases: Array<[string, Result]> = [
+    ["404 from the not-found handler", await api.request("GET", "/no-such-resource")],
+    ["405 from a method mismatch", await api.request("DELETE", "/articles")],
+    ["400 from validation", await api.request("POST", "/articles", { body: "no title" })],
+  ];
+
+  for (const [label, response] of cases) {
+    assert.equal(response.headers.get("access-control-allow-origin"), "*", label);
+  }
+});
+
 Deno.test({
   name: "teardown: close the connection pool",
   ignore: !DATABASE_URL,
